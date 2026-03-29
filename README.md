@@ -17,10 +17,10 @@ Chay theo dung thu tu:
 |---|---|---|
 | `MANV` | `VARCHAR(20)` | PK |
 | `HOTEN` | `NVARCHAR(100)` | NOT NULL |
-| `EMAIL` | `VARCHAR(20)` | NULL |
-| `LUONG` | `VARBINARY(MAX)` | Luong da ma hoa RSA_512 |
+| `EMAIL` | `VARCHAR(50)` | NULL |
+| `LUONG` | `VARBINARY(MAX)` | Luong da ma hoa RSA_2048 |
 | `TENDN` | `NVARCHAR(100)` | UNIQUE, NOT NULL |
-| `MATKHAU` | `VARBINARY(20)` | `SHA1(MK)` |
+| `MATKHAU` | `VARBINARY(32)` | `SHA2_256(MK)` |
 | `PUBKEY` | `VARCHAR(20)` | UNIQUE, luon = `MANV` |
 
 ### `dbo.LOP`
@@ -49,7 +49,7 @@ Chay theo dung thu tu:
 | `DIACHI` | `NVARCHAR(200)` | NULL |
 | `MALOP` | `VARCHAR(20)` | FK -> `LOP(MALOP)` |
 | `TENDN` | `NVARCHAR(100)` | UNIQUE, NOT NULL |
-| `MATKHAU` | `VARBINARY(20)` | SHA1 |
+| `MATKHAU` | `VARBINARY(32)` | SHA2_256 |
 
 ### `dbo.BANGDIEM`
 
@@ -76,15 +76,15 @@ Input:
 
 - `@MANV VARCHAR(20)`
 - `@HOTEN NVARCHAR(100)`
-- `@EMAIL VARCHAR(20)`
+- `@EMAIL VARCHAR(50)`
 - `@LUONGCB BIGINT`
 - `@TENDN NVARCHAR(100)`
 - `@MK NVARCHAR(128)`
 
 Xu ly:
 
-- Tao asymmetric key ten = `MANV`, thuat toan `RSA_512`, password = `MK`.
-- `HASHBYTES('SHA1', MK)` -> `MATKHAU`.
+- Tao asymmetric key ten = `MANV`, thuat toan `RSA_2048`, password = `MK`.
+- `HASHBYTES('SHA2_256', MK)` -> `MATKHAU`.
 - `ENCRYPTBYASYMKEY(public key cua MANV, LUONGCB)` -> `LUONG`.
 - `PUBKEY = MANV`.
 
@@ -119,7 +119,14 @@ Output rowset:
 - `NV14 / pmkhoa / mkNV14`
 - `NV15 / vtlong / mkNV15`
 
-## 6) Query test mau
+## 6) Seed va test script
+
+- Script `04_seed_and_tests.sql` cleanup toan bo du lieu cac bang theo thu tu phu thuoc FK, sau do seed lai du lieu mau.
+- Mat khau `SINHVIEN` duoc bam bang `SHA2_256`.
+- Du lieu `BANGDIEM.DIEMTHI` duoc ma hoa bang public key RSA_2048 cua nhan vien quan ly lop.
+- Script giu lai cac check dem so dong va 1 lenh test giai ma qua SP.
+
+## 7) Query test mau
 
 ```sql
 -- Lay thong tin nhan vien theo username

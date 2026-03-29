@@ -1,12 +1,12 @@
 USE QLSVNhom;
 GO
 
-/* cleanup dữ liệu mẫu */
-DELETE FROM dbo.BANGDIEM WHERE MASV IN ('SV01','SV02','SV03','SV04','SV05');
-DELETE FROM dbo.SINHVIEN WHERE MASV IN ('SV01','SV02','SV03','SV04','SV05');
-DELETE FROM dbo.HOCPHAN WHERE MAHP IN ('HP01','HP02','HP03','HP04','HP05');
-DELETE FROM dbo.LOP WHERE MALOP IN ('L01','L02','L03','L04','L05');
-DELETE FROM dbo.NHANVIEN WHERE MANV IN ('NV11','NV12','NV13','NV14','NV15');
+/* Cleanup */
+DELETE FROM dbo.BANGDIEM;
+DELETE FROM dbo.SINHVIEN;
+DELETE FROM dbo.HOCPHAN;
+DELETE FROM dbo.LOP;
+DELETE FROM dbo.NHANVIEN;
 GO
 
 IF EXISTS (SELECT 1 FROM sys.asymmetric_keys WHERE name = 'NV11') DROP ASYMMETRIC KEY [NV11];
@@ -16,7 +16,7 @@ IF EXISTS (SELECT 1 FROM sys.asymmetric_keys WHERE name = 'NV14') DROP ASYMMETRI
 IF EXISTS (SELECT 1 FROM sys.asymmetric_keys WHERE name = 'NV15') DROP ASYMMETRIC KEY [NV15];
 GO
 
-/* NHANVIEN: phải insert qua SP */
+/* NHANVIEN (Generates RSA_2048 and SHA2_256 via SP) */
 EXEC dbo.SP_INS_PUBLIC_NHANVIEN 'NV11', N'Nguyen Van An',  'nv11@fit.vn', 12000000, N'nvan',   N'mkNV11';
 EXEC dbo.SP_INS_PUBLIC_NHANVIEN 'NV12', N'Tran Thi Binh',  'nv12@fit.vn', 13500000, N'tbinh',  N'mkNV12';
 EXEC dbo.SP_INS_PUBLIC_NHANVIEN 'NV13', N'Le Quang Huy',   'nv13@fit.vn', 15000000, N'lqhuy',  N'mkNV13';
@@ -44,17 +44,17 @@ VALUES
 ('HP05', N'An toan thong tin', 3);
 GO
 
-/* SINHVIEN */
+/* SINHVIEN (SHA2_256) */
 INSERT INTO dbo.SINHVIEN (MASV, HOTEN, NGAYSINH, DIACHI, MALOP, TENDN, MATKHAU)
 VALUES
-('SV01', N'Nguyen Hai Dang', '2004-01-15', N'TP.HCM',     'L01', N'sv01', HASHBYTES('SHA1', N'sv01pass')),
-('SV02', N'Tran Ngoc Mai',   '2004-03-22', N'Dong Nai',   'L02', N'sv02', HASHBYTES('SHA1', N'sv02pass')),
-('SV03', N'Le Duc Anh',      '2005-07-09', N'Binh Duong', 'L03', N'sv03', HASHBYTES('SHA1', N'sv03pass')),
-('SV04', N'Pham Gia Han',    '2005-11-30', N'Long An',    'L04', N'sv04', HASHBYTES('SHA1', N'sv04pass')),
-('SV05', N'Vo Minh Thu',     '2006-05-18', N'Tay Ninh',   'L05', N'sv05', HASHBYTES('SHA1', N'sv05pass'));
+('SV01', N'Nguyen Hai Dang', '2004-01-15', N'TP.HCM',     'L01', N'sv01', HASHBYTES('SHA2_256', N'sv01pass')),
+('SV02', N'Tran Ngoc Mai',   '2004-03-22', N'Dong Nai',   'L02', N'sv02', HASHBYTES('SHA2_256', N'sv02pass')),
+('SV03', N'Le Duc Anh',      '2005-07-09', N'Binh Duong', 'L03', N'sv03', HASHBYTES('SHA2_256', N'sv03pass')),
+('SV04', N'Pham Gia Han',    '2005-11-30', N'Long An',    'L04', N'sv04', HASHBYTES('SHA2_256', N'sv04pass')),
+('SV05', N'Vo Minh Thu',     '2006-05-18', N'Tay Ninh',   'L05', N'sv05', HASHBYTES('SHA2_256', N'sv05pass'));
 GO
 
-/* BANGDIEM: mã hóa bằng public key của nhân viên quản lý lớp */
+/* BANGDIEM (RSA_2048 keys of the managing NV) */
 INSERT INTO dbo.BANGDIEM (MASV, MAHP, DIEMTHI)
 VALUES
 ('SV01', 'HP01', ENCRYPTBYASYMKEY(ASYMKEY_ID('NV11'), CONVERT(VARBINARY(16), CAST(8.50 AS DECIMAL(4,2))))),
@@ -64,7 +64,7 @@ VALUES
 ('SV05', 'HP05', ENCRYPTBYASYMKEY(ASYMKEY_ID('NV15'), CONVERT(VARBINARY(16), CAST(8.00 AS DECIMAL(4,2)))));
 GO
 
-/* Quick checks */
+/* Checks */
 SELECT COUNT(*) AS SoDong_NHANVIEN FROM dbo.NHANVIEN;
 SELECT COUNT(*) AS SoDong_LOP      FROM dbo.LOP;
 SELECT COUNT(*) AS SoDong_HOCPHAN  FROM dbo.HOCPHAN;
@@ -72,25 +72,6 @@ SELECT COUNT(*) AS SoDong_SINHVIEN FROM dbo.SINHVIEN;
 SELECT COUNT(*) AS SoDong_BANGDIEM FROM dbo.BANGDIEM;
 GO
 
-/* Kiểm tra dữ liệu */
-SELECT * FROM dbo.NHANVIEN;
-SELECT * FROM dbo.LOP;
-SELECT * FROM dbo.HOCPHAN;
-SELECT * FROM dbo.SINHVIEN;
-SELECT * FROM dbo.BANGDIEM;
-GO
-
-/* Test SP truy vấn nhân viên - gọi bằng TENDN */
+/* Test decryption via SP */
 EXEC dbo.SP_SEL_PUBLIC_NHANVIEN N'nvan', N'mkNV11';
-GO
-
-/* Test SP truy vấn nhân viên - gọi bằng MANV */
-EXEC dbo.SP_SEL_PUBLIC_NHANVIEN N'NV11', N'mkNV11';
-GO
-
-/* khi cần test lỗi */
--- EXEC dbo.SP_INS_PUBLIC_NHANVIEN 'NV11', N'Test Duplicate MANV', 'dup@fit.vn', 1000000, N'dup1', N'123456';
--- EXEC dbo.SP_INS_PUBLIC_NHANVIEN 'NV16', N'Test Duplicate TENDN', 'dup2@fit.vn', 1000000, N'nvan', N'123456';
--- EXEC dbo.SP_SEL_PUBLIC_NHANVIEN N'nvan', N'saiMK';
--- EXEC dbo.SP_SEL_PUBLIC_NHANVIEN N'khong_ton_tai', N'mkNV11';
 GO

@@ -4,7 +4,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.SP_INS_PUBLIC_NHANVIEN
     @MANV       VARCHAR(20),
     @HOTEN      NVARCHAR(100),
-    @EMAIL      VARCHAR(20),
+    @EMAIL      VARCHAR(50),
     @LUONGCB    BIGINT,
     @TENDN      NVARCHAR(100),
     @MK         NVARCHAR(128)
@@ -28,10 +28,6 @@ BEGIN
     IF @LUONGCB IS NULL OR @LUONGCB < 0
         THROW 50005, N'LUONGCB phải >= 0.', 1;
 
-    /*
-       Chặn giao nhau giữa MANV và TENDN để tránh mơ hồ khi truy vấn.
-       Ví dụ không cho phép user A có TENDN = 'NV01' nếu đã có MANV = 'NV01'.
-    */
     IF EXISTS (SELECT 1 FROM dbo.NHANVIEN WHERE MANV = @MANV OR TENDN = @MANV)
         THROW 50006, N'MANV đã tồn tại hoặc bị xung đột với TENDN hiện có.', 1;
 
@@ -47,9 +43,10 @@ BEGIN
     BEGIN TRY
         BEGIN TRAN;
 
+        /* RSA_2048 */
         SET @sql = N'
             CREATE ASYMMETRIC KEY ' + QUOTENAME(@MANV) + N'
-            WITH ALGORITHM = RSA_512
+            WITH ALGORITHM = RSA_2048
             ENCRYPTION BY PASSWORD = N''' + REPLACE(@MK, '''', '''''') + N''';';
 
         EXEC sys.sp_executesql @sql;
@@ -60,6 +57,7 @@ BEGIN
         IF @LuongMaHoa IS NULL
             THROW 50009, N'Mã hóa lương thất bại.', 1;
 
+        /* SHA2_256 */
         INSERT INTO dbo.NHANVIEN (MANV, HOTEN, EMAIL, LUONG, TENDN, MATKHAU, PUBKEY)
         VALUES
         (
@@ -68,7 +66,7 @@ BEGIN
             @EMAIL,
             @LuongMaHoa,
             @TENDN,
-            HASHBYTES('SHA1', @MK),
+            HASHBYTES('SHA2_256', @MK),
             @MANV
         );
 
@@ -85,7 +83,7 @@ BEGIN
                 EXEC sys.sp_executesql @sql;
             END TRY
             BEGIN CATCH
-                /* cố gắng dọn key rác nếu có */
+
             END CATCH
         END
 
@@ -111,15 +109,11 @@ BEGIN
     (
         MANV    VARCHAR(20),
         HOTEN   NVARCHAR(100),
-        EMAIL   VARCHAR(20),
+        EMAIL   VARCHAR(50),
         PUBKEY  VARCHAR(20),
         LUONG   VARBINARY(MAX)
     );
 
-    /*
-       Đề mô tả tham số là TENDN nhưng ví dụ lại truyền NV01 (giống MANV).
-       Để Quoc call không vỡ, proc này hỗ trợ cả TENDN lẫn MANV.
-    */
     INSERT INTO @Matched (MANV, HOTEN, EMAIL, PUBKEY, LUONG)
     SELECT MANV, HOTEN, EMAIL, PUBKEY, LUONG
     FROM dbo.NHANVIEN
@@ -132,12 +126,12 @@ BEGIN
         THROW 50012, N'Không tìm thấy nhân viên theo TENDN/MANV.', 1;
 
     IF @RowCount > 1
-        THROW 50013, N'Định danh bị mơ hồ. Dữ liệu đang có xung đột giữa MANV và TENDN.', 1;
+        THROW 50013, N'Định danh bị mơ hồ. Dữ liệu đang có xung đột.', 1;
 
     DECLARE
         @MANV       VARCHAR(20),
         @HOTEN      NVARCHAR(100),
-        @EMAIL      VARCHAR(20),
+        @EMAIL      VARCHAR(50),
         @PUBKEY     VARCHAR(20),
         @LUONG      VARBINARY(MAX),
         @LUONG_GM   VARBINARY(8000);
