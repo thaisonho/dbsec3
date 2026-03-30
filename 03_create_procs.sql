@@ -197,6 +197,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51024, N'MANV khong duoc rong.', 1;
+
     SELECT MALOP, TENLOP, MANV
     FROM dbo.LOP
     WHERE MANV = @MANV
@@ -212,6 +215,15 @@ CREATE OR ALTER PROCEDURE dbo.SP_LOP_INSERT_BY_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51025, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51026, N'MALOP khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@TENLOP)), '') IS NULL
+        THROW 51027, N'TENLOP khong duoc rong.', 1;
 
     IF NOT EXISTS (SELECT 1 FROM dbo.NHANVIEN WHERE MANV = @MANV)
         THROW 51004, N'Nhan vien khong ton tai.', 1;
@@ -232,6 +244,15 @@ CREATE OR ALTER PROCEDURE dbo.SP_LOP_UPDATE_BY_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51028, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51029, N'MALOP khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@TENLOP)), '') IS NULL
+        THROW 51030, N'TENLOP khong duoc rong.', 1;
 
     IF NOT EXISTS (SELECT 1 FROM dbo.LOP WHERE MALOP = @MALOP)
         THROW 51006, N'Lop hoc khong ton tai.', 1;
@@ -254,6 +275,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51031, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51032, N'MALOP khong duoc rong.', 1;
+
     IF NOT EXISTS (SELECT 1 FROM dbo.LOP WHERE MALOP = @MALOP AND MANV = @MANV)
         THROW 51008, N'Ban khong duoc phep xoa lop nay hoac lop khong ton tai.', 1;
 
@@ -273,6 +300,12 @@ CREATE OR ALTER PROCEDURE dbo.SP_SINHVIEN_LIST_BY_LOP_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51033, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51034, N'MALOP khong duoc rong.', 1;
 
     IF NOT EXISTS (SELECT 1 FROM dbo.LOP WHERE MALOP = @MALOP AND MANV = @MANV)
         THROW 51010, N'Ban chi duoc xem sinh vien cua lop do minh quan ly.', 1;
@@ -303,6 +336,24 @@ CREATE OR ALTER PROCEDURE dbo.SP_SINHVIEN_INSERT_BY_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51035, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MASV)), '') IS NULL
+        THROW 51036, N'MASV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@HOTEN)), '') IS NULL
+        THROW 51037, N'HOTEN khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51038, N'MALOP khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@TENDN)), '') IS NULL
+        THROW 51039, N'TENDN khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MK)), '') IS NULL
+        THROW 51040, N'MK khong duoc rong.', 1;
 
     IF NOT EXISTS (SELECT 1 FROM dbo.LOP WHERE MALOP = @MALOP AND MANV = @MANV)
         THROW 51011, N'Ban chi duoc them sinh vien vao lop minh quan ly.', 1;
@@ -340,6 +391,21 @@ CREATE OR ALTER PROCEDURE dbo.SP_SINHVIEN_UPDATE_BY_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51041, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MASV)), '') IS NULL
+        THROW 51042, N'MASV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@HOTEN)), '') IS NULL
+        THROW 51043, N'HOTEN khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51044, N'MALOP khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@TENDN)), '') IS NULL
+        THROW 51045, N'TENDN khong duoc rong.', 1;
 
     IF NOT EXISTS
     (
@@ -379,6 +445,12 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51046, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MASV)), '') IS NULL
+        THROW 51047, N'MASV khong duoc rong.', 1;
+
     IF NOT EXISTS
     (
         SELECT 1
@@ -403,6 +475,18 @@ CREATE OR ALTER PROCEDURE dbo.SP_BANGDIEM_UPSERT_BY_MANV
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51048, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MASV)), '') IS NULL
+        THROW 51049, N'MASV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MAHP)), '') IS NULL
+        THROW 51050, N'MAHP khong duoc rong.', 1;
+
+    IF @DIEMTHI IS NULL
+        THROW 51051, N'DIEMTHI khong duoc NULL.', 1;
 
     IF @DIEMTHI < 0 OR @DIEMTHI > 10
         THROW 51018, N'Diem thi phai trong khoang 0..10.', 1;
@@ -453,17 +537,48 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
+        THROW 51052, N'MANV khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MK)), '') IS NULL
+        THROW 51053, N'MK khong duoc rong.', 1;
+
+    IF NULLIF(LTRIM(RTRIM(@MALOP)), '') IS NULL
+        THROW 51054, N'MALOP khong duoc rong.', 1;
+
+    IF ASYMKEY_ID(@MANV) IS NULL
+        THROW 51055, N'Khong tim thay Public Key cua nhan vien dang nhap.', 1;
+
     IF NOT EXISTS (SELECT 1 FROM dbo.LOP WHERE MALOP = @MALOP AND MANV = @MANV)
         THROW 51023, N'Ban chi duoc xem diem cua lop minh quan ly.', 1;
 
+    DECLARE @BangDiemGiaiMa TABLE
+    (
+        MASV        VARCHAR(20),
+        HOTEN       NVARCHAR(100),
+        MAHP        VARCHAR(20),
+        DIEMTHI_GM  VARBINARY(8000)
+    );
+
+    INSERT INTO @BangDiemGiaiMa (MASV, HOTEN, MAHP, DIEMTHI_GM)
     SELECT
         s.MASV,
         s.HOTEN,
         b.MAHP,
-        CONVERT(DECIMAL(4,2), DECRYPTBYASYMKEY(ASYMKEY_ID(@MANV), b.DIEMTHI, @MK)) AS DIEMTHI
+        DECRYPTBYASYMKEY(ASYMKEY_ID(@MANV), b.DIEMTHI, @MK) AS DIEMTHI_GM
     FROM dbo.BANGDIEM b
     JOIN dbo.SINHVIEN s ON s.MASV = b.MASV
-    WHERE s.MALOP = @MALOP
-    ORDER BY s.MASV, b.MAHP;
+    WHERE s.MALOP = @MALOP;
+
+    IF EXISTS (SELECT 1 FROM @BangDiemGiaiMa WHERE DIEMTHI_GM IS NULL)
+        THROW 51056, N'Khong giai ma duoc diem thi. Kiem tra MK.', 1;
+
+    SELECT
+        MASV,
+        HOTEN,
+        MAHP,
+        CONVERT(DECIMAL(4,2), DIEMTHI_GM) AS DIEMTHI
+    FROM @BangDiemGiaiMa
+    ORDER BY MASV, MAHP;
 END
 GO
