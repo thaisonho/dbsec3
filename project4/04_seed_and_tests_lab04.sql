@@ -14,6 +14,11 @@ GO
    NV12 / tbinh / DbSec@P@ss02
    NV13 / lqhuy / DbSec@P@ss03
 */
+
+/*
+    Paste output từ sec.py xuống 3 cái EXEC NV ở dưới ------------------------------------------------------------------
+*/
+
 EXEC dbo.SP_INS_PUBLIC_ENCRYPT_NHANVIEN
     'NV11',
     N'Nguyen Van An',
@@ -41,6 +46,8 @@ EXEC dbo.SP_INS_PUBLIC_ENCRYPT_NHANVIEN
     'D8120293A537E9F0BD4DC8A97DC3625C6D6682D5ACBA7EA8964D963AE1A27AA5F65BDB847417960ECCA2F56BF14A2DCE1CB5193B2627F98136A8ECB08FB684B0',
     'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6Zlf6noUYRFuOKtE91QLGpccJoD272UCF7NujUTYbgwAT79h2WhNBB998d8QTT1CubOqeHcYzktZkdiqVvBgyKKJfoOMfil01/nXtB2jlC7k7MkbmLvdvxj9AEtTOti+G/S3XBEra39oHDdRKS3m/rGgmGZtwVz9GBW2S5FM+hJZ4Fn2Xw27tXoZ+IdcYRHDkTKVNabOpbvkbhynCFb+MVrtoh+DEhD9vIr2cpRP246SmAmqJGCcPcy5ovEKLslD7XqEquVYgMMIdH5DMP29geF1DRJmukAPE/8ot3KvXJfezIxly2uPw4Bl+tYt0EV1P7ZqShC4g7emMK6vp8JzcQIDAQAB';
 GO
+
+-------------------------------------------------------------------
 
 INSERT INTO dbo.LOP (MALOP, TENLOP, MANV)
 VALUES

@@ -1,16 +1,7 @@
 USE QLSVNhom;
 GO
 
-/*
-SP_INS_PUBLIC_ENCRYPT_NHANVIEN
-- Không hash password trong SQL.
-- Không mã hóa RSA trong SQL.
-- Chỉ nhận dữ liệu ĐÃ xử lý từ client rồi lưu xuống DB.
-- @MK là SHA-512 hex string do client gửi lên.
-- @LUONG là ciphertext RSA-2048 Base64 do client gửi lên.
-- @PUB là public key RSA-2048 Base64 (DER/SPKI) do client gửi lên.
-*/
-
+/* 1. INSERT NHANVIEN (Bao gồm VAITRO) */
 CREATE OR ALTER PROCEDURE dbo.SP_INS_PUBLIC_ENCRYPT_NHANVIEN
     @MANV       VARCHAR(20),
     @HOTEN      NVARCHAR(100),
@@ -18,102 +9,87 @@ CREATE OR ALTER PROCEDURE dbo.SP_INS_PUBLIC_ENCRYPT_NHANVIEN
     @LUONG      VARCHAR(500),
     @TENDN      NVARCHAR(100),
     @MK         VARCHAR(128),
-    @PUB        VARCHAR(500)
+    @PUB        VARCHAR(500),
+    @VAITRO     VARCHAR(20)
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
-    IF NULLIF(LTRIM(RTRIM(@MANV)), '') IS NULL
-        THROW 50001, N'MANV không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@HOTEN)), '') IS NULL
-        THROW 50002, N'HOTEN không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@TENDN)), '') IS NULL
-        THROW 50003, N'TENDN không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@MK)), '') IS NULL
-        THROW 50004, N'MK không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@LUONG)), '') IS NULL
-        THROW 50005, N'LUONG không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@PUB)), '') IS NULL
-        THROW 50006, N'PUB không được rỗng.', 1;
-
-    /*
-    Chặn xung đột MANV / TENDN để proc select có thể hỗ trợ cả TENDN lẫn MANV
-    mà không bị mơ hồ vì đề lab ví dụ truyền @MANV dù danh sách tham số ghi @TENDN.
-    */
     IF EXISTS (SELECT 1 FROM dbo.NHANVIEN WHERE MANV = @MANV OR TENDN = @MANV)
         THROW 50007, N'MANV đã tồn tại hoặc bị xung đột với TENDN hiện có.', 1;
 
-    IF EXISTS (SELECT 1 FROM dbo.NHANVIEN WHERE TENDN = @TENDN OR MANV = @TENDN)
-        THROW 50008, N'TENDN đã tồn tại hoặc bị xung đột với MANV hiện có.', 1;
-
     DECLARE @MK_BIN VARBINARY(64) = TRY_CONVERT(VARBINARY(64), @MK, 2);
 
-    IF @MK_BIN IS NULL OR DATALENGTH(@MK_BIN) <> 64
-        THROW 50009, N'MK phải là SHA-512 hex string hợp lệ (128 ký tự hex).', 1;
-
-    INSERT INTO dbo.NHANVIEN (MANV, HOTEN, EMAIL, LUONG, TENDN, MATKHAU, PUBKEY)
-    VALUES (@MANV, @HOTEN, @EMAIL, @LUONG, @TENDN, @MK_BIN, @PUB);
+    INSERT INTO dbo.NHANVIEN (MANV, HOTEN, EMAIL, LUONG, TENDN, MATKHAU, PUBKEY, VAITRO)
+    VALUES (@MANV, @HOTEN, @EMAIL, @LUONG, @TENDN, @MK_BIN, @PUB, @VAITRO);
 END
 GO
 
-/*
-SP_SEL_PUBLIC_ENCRYPT_NHANVIEN
-- Xác thực bằng TENDN/MANV + SHA-512 hash từ client.
-- Trả LUONG vẫn ở dạng ciphertext Base64.
-- Client tự dùng private key local để giải mã.
-*/
+/* 2. SELECT NHANVIEN */
 CREATE OR ALTER PROCEDURE dbo.SP_SEL_PUBLIC_ENCRYPT_NHANVIEN
     @TENDN    NVARCHAR(100),
     @MK       VARCHAR(128)
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    IF NULLIF(LTRIM(RTRIM(@TENDN)), '') IS NULL
-        THROW 50010, N'TENDN/MANV không được rỗng.', 1;
-
-    IF NULLIF(LTRIM(RTRIM(@MK)), '') IS NULL
-        THROW 50011, N'MK không được rỗng.', 1;
-
     DECLARE @MK_BIN VARBINARY(64) = TRY_CONVERT(VARBINARY(64), @MK, 2);
 
-    IF @MK_BIN IS NULL OR DATALENGTH(@MK_BIN) <> 64
-        THROW 50012, N'MK phải là SHA-512 hex string hợp lệ (128 ký tự hex).', 1;
-
-    DECLARE @Matched TABLE
-    (
-        MANV   VARCHAR(20),
-        HOTEN  NVARCHAR(100),
-        EMAIL  VARCHAR(100),
-        LUONG  VARCHAR(500)
-    );
-
-    INSERT INTO @Matched (MANV, HOTEN, EMAIL, LUONG)
-    SELECT MANV, HOTEN, EMAIL, LUONG
+    SELECT TOP (1) MANV, HOTEN, EMAIL, LUONG, VAITRO
     FROM dbo.NHANVIEN
-    WHERE (TENDN = @TENDN OR MANV = @TENDN)
-      AND MATKHAU = @MK_BIN;
-
-    DECLARE @RowCount INT;
-    SELECT @RowCount = COUNT(*) FROM @Matched;
-
-    IF @RowCount = 0
+    WHERE (TENDN = @TENDN OR MANV = @TENDN) AND MATKHAU = @MK_BIN;
+    
+    IF @@ROWCOUNT = 0
         THROW 50013, N'Sai thông tin đăng nhập hoặc không tìm thấy nhân viên.', 1;
+END
+GO
 
-    IF @RowCount > 1
-        THROW 50014, N'Dữ liệu bị mơ hồ do xung đột MANV/TENDN.', 1;
+/* 3. CẬP NHẬT THÔNG TIN NHÂN VIÊN (KHÔNG ĐỔI MẬT KHẨU) */
+CREATE OR ALTER PROCEDURE dbo.SP_UPD_NHANVIEN_INFO
+    @ACTION_MANV    VARCHAR(20), -- User performing the action
+    @TARGET_MANV    VARCHAR(20), -- User being updated
+    @NEW_HOTEN      NVARCHAR(100),
+    @NEW_EMAIL      VARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @ROLE VARCHAR(20);
+    SELECT @ROLE = VAITRO FROM dbo.NHANVIEN WHERE MANV = @ACTION_MANV;
 
-    SELECT TOP (1)
-        MANV,
-        HOTEN,
-        EMAIL,
-        LUONG
-    FROM @Matched;
+    IF @ROLE IS NULL
+        THROW 50016, N'Người dùng thực hiện không tồn tại.', 1;
+
+    -- Chỉ ADMIN mới được sửa người khác. USER chỉ được sửa chính mình.
+    IF @ROLE <> 'ADMIN' AND @ACTION_MANV <> @TARGET_MANV
+        THROW 50017, N'Từ chối truy cập: Không có quyền sửa thông tin nhân viên khác.', 1;
+
+    UPDATE dbo.NHANVIEN
+    SET HOTEN = @NEW_HOTEN, EMAIL = @NEW_EMAIL
+    WHERE MANV = @TARGET_MANV;
+END
+GO
+
+/* 4. USER TỰ ĐỔI MẬT KHẨU (Yêu cầu mật khẩu cũ để map với Client Pipeline) */
+CREATE OR ALTER PROCEDURE dbo.SP_CHANGE_PASSWORD_NHANVIEN
+    @MANV           VARCHAR(20),
+    @OLD_MK_HASH    VARCHAR(128),
+    @NEW_MK_HASH    VARCHAR(128),
+    @NEW_PUBKEY     VARCHAR(500),
+    @NEW_LUONG      VARCHAR(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @OLD_MK_BIN VARBINARY(64) = TRY_CONVERT(VARBINARY(64), @OLD_MK_HASH, 2);
+    DECLARE @NEW_MK_BIN VARBINARY(64) = TRY_CONVERT(VARBINARY(64), @NEW_MK_HASH, 2);
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.NHANVIEN WHERE MANV = @MANV AND MATKHAU = @OLD_MK_BIN)
+        THROW 50015, N'Mật khẩu cũ không chính xác.', 1;
+
+    UPDATE dbo.NHANVIEN
+    SET MATKHAU = @NEW_MK_BIN,
+        PUBKEY = @NEW_PUBKEY,
+        LUONG = @NEW_LUONG
+    WHERE MANV = @MANV;
 END
 GO

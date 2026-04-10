@@ -1,148 +1,129 @@
 """
 security_utils.py
 -----------------
-- Hash password bằng SHA-512
-- Tạo cặp khóa RSA 2048
-- Export public key để lưu DB
-- Encrypt / decrypt LUONG, DIEMTHI ở client
-- Chuyển đổi bytes <-> string để gửi vào SQL Server
-
-pip install pycryptodome
+- Mật khẩu tạo seed SHA-512.
+- Seed chạy qua ChaCha20 tạo luồng random vô tận để feed vào RSA.generate.
+- Export public key để lưu DB.
+- Hỗ trợ Pipeline đổi mật khẩu.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
-from pathlib import Path
 from typing import Dict, Union
 
-from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Cipher import ChaCha20, PKCS1_OAEP
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 
-
 def sha512_hex(plain_text: str) -> str:
     """Hash chuỗi bằng SHA-512 và trả về hex string viết hoa (128 ký tự)."""
-    if plain_text is None:
-        raise ValueError("plain_text cannot be None")
     return hashlib.sha512(plain_text.encode("utf-8")).hexdigest().upper()
 
+def get_deterministic_randfunc(password: str):
+    """
+    SHA-512 tạo seed, bơm vào ChaCha20
+    để tạo hàm pseudo-random cung cấp cho thư viện RSA
+    """
+    seed_bytes = hashlib.sha512(password.encode("utf-8")).digest() # 64 bytes
+    
+    key = seed_bytes[:32]      # 256-bit key cho ChaCha20
+    nonce = seed_bytes[32:40]  # 64-bit nonce cho ChaCha20
 
-def generate_rsa_keypair(bits: int = 2048) -> tuple[str, str]:
-    """Tạo cặp khóa RSA và trả về (private_pem, public_pem)."""
-    key = RSA.generate(bits)
-    private_pem = key.export_key().decode("utf-8")
-    public_pem = key.publickey().export_key().decode("utf-8")
-    return private_pem, public_pem
+    # Khởi tạo bộ sinh luồng ChaCha20
+    cipher = ChaCha20.new(key=key, nonce=nonce)
 
+    def randfunc(n: int) -> bytes:
+        # Mã hóa chuỗi byte rỗng để lấy keystream giả ngẫu nhiên liên tục
+        return cipher.encrypt(b'\x00' * n)
 
-def save_keypair(private_pem: str, public_pem: str, private_path: Union[str, Path], public_path: Union[str, Path]) -> None:
-    Path(private_path).write_text(private_pem, encoding="utf-8")
-    Path(public_path).write_text(public_pem, encoding="utf-8")
+    return randfunc
 
-
-def load_private_key(private_path: Union[str, Path]) -> RSA.RsaKey:
-    return RSA.import_key(Path(private_path).read_text(encoding="utf-8"))
-
-
-def load_public_key(public_path: Union[str, Path]) -> RSA.RsaKey:
-    return RSA.import_key(Path(public_path).read_text(encoding="utf-8"))
-
+def generate_deterministic_rsa_keypair(password: str, bits: int = 2048) -> RSA.RsaKey:
+    """Tạo khóa RSA cố định (deterministic) dựa trên password."""
+    randfunc = get_deterministic_randfunc(password)
+    # RSA.generate sẽ cắt tuần tự luồng byte từ randfunc để tìm p và q
+    key = RSA.generate(bits, randfunc=randfunc)
+    return key
 
 def public_key_pem_to_b64(public_pem: str) -> str:
-    """
-    Convert public key PEM -> Base64 DER/SPKI để lưu trong SQL Server.
-    Đây là format nên lưu vào cột PUBKEY.
-    """
     key = RSA.import_key(public_pem.encode("utf-8"))
     der = key.publickey().export_key(format="DER")
     return base64.b64encode(der).decode("ascii")
 
-
-def public_key_b64_to_key(public_key_b64: str) -> RSA.RsaKey:
-    """Convert Base64 DER/SPKI từ DB -> RSA public key object."""
-    der = base64.b64decode(public_key_b64)
-    return RSA.import_key(der)
-
-
-def rsa_encrypt_text_to_b64(plain_text: str, public_key: Union[str, RSA.RsaKey]) -> str:
-    """
-    Mã hóa text bằng RSA-2048 OAEP-SHA256 rồi trả Base64 string.
-    public_key có thể là:
-    - PEM string
-    - RSA key object
-    """
-    if isinstance(public_key, str):
-        key = RSA.import_key(public_key.encode("utf-8"))
-    else:
-        key = public_key
-
-    cipher = PKCS1_OAEP.new(key, hashAlgo=SHA256)
+def rsa_encrypt_text_to_b64(plain_text: str, rsa_key: RSA.RsaKey) -> str:
+    cipher = PKCS1_OAEP.new(rsa_key, hashAlgo=SHA256)
     cipher_bytes = cipher.encrypt(plain_text.encode("utf-8"))
     return base64.b64encode(cipher_bytes).decode("ascii")
 
-
-def rsa_decrypt_b64_to_text(cipher_text_b64: str, private_key: Union[str, RSA.RsaKey]) -> str:
-    """
-    Giải mã Base64 ciphertext bằng private key local.
-    private_key có thể là:
-    - PEM string
-    - RSA key object
-    """
-    if isinstance(private_key, str):
-        key = RSA.import_key(private_key.encode("utf-8"))
-    else:
-        key = private_key
-
-    cipher = PKCS1_OAEP.new(key, hashAlgo=SHA256)
+def rsa_decrypt_b64_to_text(cipher_text_b64: str, rsa_key: RSA.RsaKey) -> str:
+    cipher = PKCS1_OAEP.new(rsa_key, hashAlgo=SHA256)
     plain_bytes = cipher.decrypt(base64.b64decode(cipher_text_b64))
     return plain_bytes.decode("utf-8")
 
-
 def build_insert_nhanvien_payload(
-    manv: str,
-    hoten: str,
-    email: str,
-    luongcb: Union[int, float, str],
-    tendn: str,
-    matkhau_plain: str,
-    private_key_path: Union[str, Path],
-    public_key_path: Union[str, Path],
+    manv: str, hoten: str, email: str, luongcb: str, tendn: str, matkhau_plain: str, vaitro: str
 ) -> Dict[str, str]:
-    """
-    Chuẩn bị đúng 7 tham số để call SP_INS_PUBLIC_ENCRYPT_NHANVIEN:
-    MANV, HOTEN, EMAIL, LUONG, TENDN, MK, PUB
-    """
-    public_key = load_public_key(public_key_path)
-    public_pem = Path(public_key_path).read_text(encoding="utf-8")
+    """Tạo payload gọi SP_INS_PUBLIC_ENCRYPT_NHANVIEN"""
+    rsa_key = generate_deterministic_rsa_keypair(matkhau_plain)
+    public_pem = rsa_key.publickey().export_key().decode("utf-8")
 
     return {
         "MANV": manv,
         "HOTEN": hoten,
         "EMAIL": email,
-        "LUONG": rsa_encrypt_text_to_b64(str(luongcb), public_key),
+        "LUONG": rsa_encrypt_text_to_b64(luongcb, rsa_key),
         "TENDN": tendn,
         "MK": sha512_hex(matkhau_plain),
         "PUB": public_key_pem_to_b64(public_pem),
+        "VAITRO": vaitro
     }
 
+def build_change_password_payload(
+    manv: str, old_password: str, new_password: str, encrypted_luong_b64_from_db: str
+) -> Dict[str, str]:
+    """
+    PIPELINE ĐỔI MẬT KHẨU: 
+    1. Lấy khóa cũ -> Giải mã lương. 
+    2. Tạo khóa mới -> Mã hóa lại lương.
+    """
+    # 1. Giải mã bằng Private Key cũ
+    old_key = generate_deterministic_rsa_keypair(old_password)
+    luong_plain = rsa_decrypt_b64_to_text(encrypted_luong_b64_from_db, old_key)
 
-def decrypt_salary_from_db(cipher_text_b64: str, private_key_path: Union[str, Path]) -> str:
-    """Nhận LUONG từ DB và giải mã bằng private key local."""
-    private_key = load_private_key(private_key_path)
-    return rsa_decrypt_b64_to_text(cipher_text_b64, private_key)
+    # 2. Tạo Private/Public Key mới và mã hóa lại lương
+    new_key = generate_deterministic_rsa_keypair(new_password)
+    new_luong_b64 = rsa_encrypt_text_to_b64(luong_plain, new_key)
+    new_pub_pem = new_key.publickey().export_key().decode("utf-8")
 
+    return {
+        "MANV": manv,
+        "OLD_MK_HASH": sha512_hex(old_password),
+        "NEW_MK_HASH": sha512_hex(new_password),
+        "NEW_PUBKEY": public_key_pem_to_b64(new_pub_pem),
+        "NEW_LUONG": new_luong_b64
+    }
 
 if __name__ == "__main__":
-    # Demo local nhanh
-    private_pem, public_pem = generate_rsa_keypair()
-    sample_hash = sha512_hex("mkNV11")
-    sample_pub_b64 = public_key_pem_to_b64(public_pem)
-    sample_cipher = rsa_encrypt_text_to_b64("12000000", public_pem)
-    sample_plain = rsa_decrypt_b64_to_text(sample_cipher, private_pem)
+    # --- UTILITY: SINH MÃ SQL CHO FILE 04_seed_and_tests_lab04.sql ---
+    # Chạy đoạn này để in ra các lệnh EXEC với PubKey và Luong chuẩn từ Hash Deterministic
+    
+    nhanviens = [
+        ("NV11", "Nguyen Van An", "nv11@fit.vn", "15000000", "nvan", "DbSec@P@ss01", "ADMIN"),
+        ("NV12", "Tran Thi Binh", "nv12@fit.vn", "12000000", "tbinh", "DbSec@P@ss02", "USER"),
+        ("NV13", "Le Quang Huy", "nv13@fit.vn", "10000000", "lqhuy", "DbSec@P@ss03", "USER"),
+    ]
 
-    print("SHA512:", sample_hash)
-    print("PUBKEY_B64:", sample_pub_b64[:60] + "...")
-    print("LUONG_B64:", sample_cipher[:60] + "...")
-    print("DECRYPTED:", sample_plain)
+    #print("/* PASTE NHỮNG LỆNH NÀY VÀO 04_seed_and_tests_lab04.sql */\n")
+    for nv in nhanviens:
+        p = build_insert_nhanvien_payload(nv[0], nv[1], nv[2], nv[3], nv[4], nv[5], nv[6])
+        print(f"EXEC dbo.SP_INS_PUBLIC_ENCRYPT_NHANVIEN\n"
+              f"    '{p['MANV']}',\n"
+              f"    N'{p['HOTEN']}',\n"
+              f"    '{p['EMAIL']}',\n"
+              f"    '{p['LUONG']}',\n"
+              f"    N'{p['TENDN']}',\n"
+              f"    '{p['MK']}',\n"
+              f"    '{p['PUB']}',\n"
+              f"    '{p['VAITRO']}';\n")

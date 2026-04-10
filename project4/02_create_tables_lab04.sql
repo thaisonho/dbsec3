@@ -8,19 +8,6 @@ IF OBJECT_ID(N'dbo.LOP', N'U') IS NOT NULL DROP TABLE dbo.LOP;
 IF OBJECT_ID(N'dbo.NHANVIEN', N'U') IS NOT NULL DROP TABLE dbo.NHANVIEN;
 GO
 
-/*
-Lab 04 yêu cầu:
-- Mã hóa dữ liệu ở client trước khi lưu xuống CSDL.
-- Giải mã dữ liệu ở client sau khi truy vấn.
-- Public key được lưu trong DB.
-- Private key KHÔNG lưu trong DB.
-
-Thiết kế ở đây:
-- MATKHAU lưu dạng VARBINARY(64) = SHA-512 raw bytes.
-- LUONG / DIEMTHI lưu dạng VARCHAR(500) = ciphertext RSA-2048 mã hóa ở client, encode Base64.
-- PUBKEY lưu dạng VARCHAR(500) = public key RSA-2048 export ở client, encode Base64 (DER/SPKI).
-*/
-
 CREATE TABLE dbo.NHANVIEN
 (
     MANV     VARCHAR(20)    NOT NULL,
@@ -30,10 +17,12 @@ CREATE TABLE dbo.NHANVIEN
     TENDN    NVARCHAR(100)  NOT NULL,
     MATKHAU  VARBINARY(64)  NOT NULL,
     PUBKEY   VARCHAR(500)   NOT NULL,
+    VAITRO   VARCHAR(20)    NOT NULL DEFAULT 'USER',
 
     CONSTRAINT PK_NHANVIEN PRIMARY KEY (MANV),
     CONSTRAINT UQ_NHANVIEN_TENDN UNIQUE (TENDN),
-    CONSTRAINT UQ_NHANVIEN_PUBKEY UNIQUE (PUBKEY)
+    CONSTRAINT UQ_NHANVIEN_PUBKEY UNIQUE (PUBKEY),
+    CONSTRAINT CK_NHANVIEN_VAITRO CHECK (VAITRO IN ('ADMIN', 'USER'))
 );
 GO
 
